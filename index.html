@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="クエストログ">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="robots" content="noindex, nofollow">
 <title>クエストログ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -169,6 +170,55 @@ select{appearance:none;}
 .streak-flag{
   font-size:.72rem;color:var(--teal);margin-left:4px;
 }
+.tag-daily{
+  font-size:.68rem;font-weight:600;color:#1F6E63;background:#D3F1EC;
+  padding:1px 7px;border-radius:999px;margin-left:4px;
+}
+.tag-date{
+  font-size:.68rem;font-weight:600;color:#8A6A1E;background:#F3E7C4;
+  padding:1px 7px;border-radius:999px;margin-left:4px;
+}
+.field-hint{font-size:.72rem;color:var(--parchment-dim);margin:-.3rem 0 .7rem;line-height:1.5;}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;}
+.cal-nav{
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  width:34px;height:34px;color:var(--teal);font-size:.9rem;cursor:pointer;
+}
+.cal-title{font-weight:700;font-size:1rem;color:var(--ink);}
+.cal-weekdays{
+  display:grid;grid-template-columns:repeat(7,1fr);text-align:center;
+  font-size:.72rem;color:var(--parchment-dim);margin-bottom:.4rem;
+}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:1rem;}
+.cal-cell{
+  aspect-ratio:1;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.78rem;color:var(--ink);cursor:pointer;position:relative;
+}
+.cal-cell.other-month{opacity:.3;cursor:default;}
+.cal-cell.today{border-color:var(--teal);border-width:2px;}
+.cal-cell.has-schedule{background:#FBEFD2;border-color:#E4C77A;}
+.cal-cell.selected{background:var(--gold);color:var(--ink);font-weight:700;}
+.cal-cell.selected.has-schedule{background:var(--gold);border-color:var(--gold);}
+.cal-dot{width:5px;height:5px;border-radius:50%;background:var(--teal);position:absolute;bottom:5px;}
+.cal-badge{
+  position:absolute;top:2px;right:2px;background:var(--teal);color:#fff;
+  font-size:.58rem;border-radius:999px;min-width:14px;height:14px;line-height:14px;
+  text-align:center;padding:0 2px;
+}
+.cal-detail{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.9rem 1rem;}
+.cal-detail h3{font-size:.88rem;margin:0 0 .6rem;color:var(--ink);}
+.cal-detail-empty{font-size:.8rem;color:var(--parchment-dim);}
+.cal-detail-item{
+  display:flex;justify-content:space-between;gap:.5rem;font-size:.82rem;color:var(--ink);
+  padding:.4rem 0;border-bottom:1px solid var(--line);
+}
+.cal-detail-item:last-child{border-bottom:none;}
+.cal-item-right{display:flex;align-items:center;gap:.4rem;flex:none;}
+.cal-del-btn{
+  background:none;border:none;color:#B0AFA0;cursor:pointer;
+  font-size:1rem;padding:0 2px;line-height:1;
+}
 .levelup-overlay{
   display:none;
   position:fixed;inset:0;
@@ -265,6 +315,7 @@ select{appearance:none;}
   <div class="tabs">
     <button class="tab-btn active" data-tab="tasks">タスク</button>
     <button class="tab-btn" data-tab="rewards">ごほうび</button>
+    <button class="tab-btn" data-tab="calendar">カレンダー</button>
   </div>
 
   <button class="backup-link" id="backup-open-btn">🗂 データのバックアップ・復元</button>
@@ -285,9 +336,17 @@ select{appearance:none;}
         </select>
       </div>
       <label class="streak-check">
-        <input type="checkbox" id="task-streak">
-        連続ボーナスを付ける(7日連続で最大+50%)
+        <input type="checkbox" id="task-daily">
+        毎日タスクにする(締め時間で自動的にまた完了できる状態に戻る)
       </label>
+      <label class="streak-check">
+        <input type="checkbox" id="task-streak">
+        連続ボーナスを付ける(7日連続で最大+50%・毎日タスク限定)
+      </label>
+      <div class="field-row">
+        <input type="date" id="task-date">
+      </div>
+      <div class="field-hint">予約日(任意)。指定するとその日になるまでタスク一覧に表示されません。</div>
       <div class="err" id="task-err">タスク名を入力してください</div>
       <button class="submit-btn" id="add-task-btn">クエストに追加</button>
     </div>
@@ -307,6 +366,19 @@ select{appearance:none;}
       <div class="err" id="reward-err">名前と必要レベルを入力してください</div>
       <button class="submit-btn" id="add-reward-btn">ごほうびを登録</button>
     </div>
+  </div>
+
+  <div class="section" id="calendar-section">
+    <div class="cal-header">
+      <button class="cal-nav" id="cal-prev">◀</button>
+      <div class="cal-title" id="cal-title">2026年9月</div>
+      <button class="cal-nav" id="cal-next">▶</button>
+    </div>
+    <div class="cal-weekdays">
+      <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-detail" id="cal-detail"></div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -343,7 +415,7 @@ select{appearance:none;}
 
 <script>
 const STORAGE_KEY = 'quest-log-state';
-let state = { xp: 0, tasks: [], rewards: [], streak: { count: 0, lastDate: null } };
+let state = { xp: 0, tasks: [], rewards: [], streak: { count: 0, lastDate: null }, history: [] };
 
 function xpForLevel(n){ return 100 + (n-1)*40; }
 function levelFromXp(xp){
@@ -355,11 +427,17 @@ function levelFromXp(xp){
   return {level:lvl, into:remaining, need:xpForLevel(lvl)};
 }
 
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function todayStr(){ return localDateStr(new Date()); }
 function yesterdayStr(){
   const d = new Date();
   d.setDate(d.getDate()-1);
-  return d.toISOString().slice(0,10);
+  return localDateStr(d);
+}
+function localDateStr(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return y + '-' + m + '-' + day;
 }
 function bonusRateForStreak(count){
   const capped = Math.min(count, 7);
@@ -367,6 +445,35 @@ function bonusRateForStreak(count){
 }
 const CLEAR_BONUS_RATE = 0.20; // タスク全クリアボーナス: 本日獲得XPの20%
 const LOGIN_BONUS_RATE = 0.10; // ログインボーナス: 現レベルの必要XPの10%
+
+function isTaskDoneToday(t){
+  return t.recurrence === 'daily' ? (t.lastDoneDate === todayStr()) : !!t.done;
+}
+function isTaskVisibleToday(t){
+  if(t.scheduledDate && t.scheduledDate > todayStr()) return false;
+  return true;
+}
+function migrateState(){
+  if(!state.streak) state.streak = { count:0, lastDate:null };
+  if(!state.todayEarnedDate) state.todayEarnedDate = null;
+  if(typeof state.todayEarnedXp !== 'number') state.todayEarnedXp = 0;
+  if(!state.lastClearBonusDate) state.lastClearBonusDate = null;
+  if(!state.lastLoginBonusDate) state.lastLoginBonusDate = null;
+  if(!Array.isArray(state.history)) state.history = [];
+  if(!Array.isArray(state.tasks)) state.tasks = [];
+  state.tasks.forEach(t=>{
+    if(!t.recurrence){
+      if(t.streakEnabled){
+        t.recurrence = 'daily';
+        t.lastDoneDate = t.done ? todayStr() : null;
+      } else {
+        t.recurrence = 'once';
+      }
+    }
+    if(t.scheduledDate === undefined) t.scheduledDate = null;
+    if(t.lastDoneDate === undefined) t.lastDoneDate = null;
+  });
+}
 function bumpStreak(){
   if(!state.streak) state.streak = { count:0, lastDate:null };
   const today = todayStr();
@@ -442,10 +549,71 @@ function getTimeSlot(hour){
   if(hour >= 17 && hour < 21) return 'evening';
   return 'night';
 }
+
+const SEASON_LINES = {
+  spring: [
+    '桜とやらが咲いているらしいな。……俺の国にはない花だ、正直、少し気になっている。',
+    '春か。俺の海には、こんなふうに景色が変わる季節はない。……悪くない眺めだな。',
+    '花粉とやらで具合が悪くなる人間がいると聞いた。お前は平気なのか。',
+    'この時期は新しい生活が始まる者が多いらしいな。お前は変わらず、そこにいろ。',
+    '桜が散る様を「儚い」と表現するらしいが、俺にはまだよく分からん。……今度、実物を見せてもらおう。',
+    '暖かくなってきたな。俺の国は一年中こんな陽気だ。お前の方が忙しない気候だな。',
+    '春風というのは、悪くない。……特に意味はない、ただそう思っただけだ。',
+    '新年度、というものがあるらしいな。区切りをつけたがるのは、お前の国の癖か。',
+    '桜の下で祝う習慣があると聞いた。……俺の国に酒はあるが、花見という発想はなかったな。',
+    '一年中同じ景色の俺には、季節が動くというのがどうにも新鮮だ。……悪い気はしない。'
+  ],
+  summer: [
+    'この暑さくらい、俺の国では当たり前だ。……お前の方が参っているように見えるがな。',
+    '蝉とやらの声がうるさいと聞いた。俺の国にはいない虫だ。今度聞いてみたいものだな。',
+    '花火というのは、俺の国の祭りの火とは違う仕掛けらしいな。……興味がないわけではない。',
+    '湿気というものには慣れん。俺の海の国は乾いた暑さだ。お前の夏は、少し厄介そうだな。',
+    '夏祭り、というものがあるらしいな。俺の国にも似た夜の宴はあった。懐かしいような、そうでもないような。',
+    '海が近くにあるなら、たまには出向くといい。……俺の国の海とは、色が違うのだろうがな。',
+    'この時期は体調を崩す奴が多いと聞く。無理はするなよ、希羽。',
+    '俺の国に四季はないが、暑さだけはよく知っている。今のお前より、上手く付き合える自信はある。',
+    '冷たいものばかり口にしていないだろうな。……別に、心配しているわけではない。',
+    '夜になっても暑いというのは、俺の国と似ているな。……少しだけ、居心地がいい。'
+  ],
+  autumn: [
+    '紅葉とやらで山が赤くなるらしいな。……俺の国には、色を変える木がない。見てみたいものだ。',
+    '涼しくなってきたな。俺の国にこの感覚はない。悪くはないが、慣れないものだな。',
+    '「食欲の秋」というものがあるらしいが、理屈がよく分からん。……まあ、お前が元気ならそれでいい。',
+    '台風とやらが来ると聞いた。俺の海の嵐とは、また違う性質のものらしいな。用心しておけ。',
+    '銀杏の匂いがひどいと聞いたが、俺には分からん感覚だな。……お前はどう思っているんだ。',
+    '木々が葉を落とす、というのが俺には新鮮だ。俺の国の木は、一年中同じ姿をしている。',
+    '日が落ちるのが早くなったな。……気づいただけだ、他意はない。',
+    'この時期は物思いにふけりやすいと聞く。お前は、あまりそういう性分でもないだろうがな。',
+    '秋の空気は済んでいて、悪くないと思うが……俺の国の乾いた風とは、また違う涼しさだな。',
+    '季節が変わるたびに、俺の知らないことが増えていく。……それも、悪くはない。'
+  ],
+  winter: [
+    '雪、というものを俺はまだ実物で見たことがない。……お前の国では、当たり前の光景なんだろうな。',
+    'この寒さは、正直に言うと堪える。俺の国に、こんな季節はない。',
+    '正月とやらで一年の節目をつけるらしいな。……区切りを大事にする国だ。',
+    'こたつというものに入ると出られなくなると聞いた。俺には理解しがたい魔道具だな。',
+    '忘年会とやらで一年を締めくくるらしいが、俺の国に似た習慣はない。……悪くない発想だとは思う。',
+    '息が白くなる、というのは俺の国では起こらない現象だ。今度、実際に確かめてみたいものだな。',
+    '暖かい飲み物を欲しがる季節らしいな。……別に、お前のために言っているわけじゃない。',
+    '俺の海は凍らない。お前の国のこの寒さには、正直まだ慣れそうにない。',
+    '一年の終わりというのは、俺の国にはない感覚だ。……悪くはない、区切りというのも。',
+    '寒いなら、無理に薄着をするな。……忠告しているだけだ、他意はない。'
+  ]
+};
+function getSeason(month){
+  if(month >= 3 && month <= 5) return 'spring';
+  if(month >= 6 && month <= 8) return 'summer';
+  if(month >= 9 && month <= 11) return 'autumn';
+  return 'winter';
+}
+
 function showLoginGreeting(){
-  const data = TIME_GREETINGS[getTimeSlot(new Date().getHours())];
-  const line = data.lines[Math.floor(Math.random()*data.lines.length)];
-  queueModal({ badge: data.badge, big: null, msg: line });
+  const now = new Date();
+  const timeData = TIME_GREETINGS[getTimeSlot(now.getHours())];
+  const seasonLines = SEASON_LINES[getSeason(now.getMonth()+1)];
+  const pool = timeData.lines.concat(seasonLines);
+  const line = pool[Math.floor(Math.random()*pool.length)];
+  queueModal({ badge: timeData.badge, big: null, msg: line });
 }
 
 let modalQueue = [];
@@ -487,11 +655,7 @@ function load(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw) state = JSON.parse(raw);
   }catch(e){}
-  if(!state.streak) state.streak = { count:0, lastDate:null };
-  if(!state.todayEarnedDate) state.todayEarnedDate = null;
-  if(typeof state.todayEarnedXp !== 'number') state.todayEarnedXp = 0;
-  if(!state.lastClearBonusDate) state.lastClearBonusDate = null;
-  if(!state.lastLoginBonusDate) state.lastLoginBonusDate = null;
+  migrateState();
   showLoginGreeting();
   grantLoginBonusIfNeeded();
   render();
@@ -524,22 +688,28 @@ function render(){
   }
 
   const list = document.getElementById('task-list');
-  const active = state.tasks.filter(t=>!t.done);
-  const done = state.tasks.filter(t=>t.done);
-  const ordered = [...active, ...done];
+  const visible = state.tasks.filter(isTaskVisibleToday);
+  const activeT = visible.filter(t=>!isTaskDoneToday(t));
+  const doneT = visible.filter(t=>isTaskDoneToday(t));
+  const ordered = [...activeT, ...doneT];
   if(ordered.length===0){
     list.innerHTML = '<div class="empty">まだクエストがありません。下から追加しましょう。</div>';
   } else {
     list.innerHTML = ordered.map(t=>{
-      const shownXp = t.done ? (t.earnedXp ?? t.xp) : t.xp;
-      const metaText = t.done
+      const done = isTaskDoneToday(t);
+      const shownXp = done ? (t.earnedXp ?? t.xp) : t.xp;
+      const badges = [];
+      if(t.recurrence === 'daily') badges.push('<span class="tag-daily">毎日</span>');
+      if(t.streakEnabled) badges.push('<span class="streak-flag">🔥</span>');
+      if(t.scheduledDate) badges.push('<span class="tag-date">📅 ' + t.scheduledDate.slice(5) + '〜</span>');
+      const metaText = done
         ? ('完了済み' + (t.bonusApplied ? ' ・連続ボーナス+' + t.bonusApplied + '%' : ''))
         : ('未完了' + (t.streakEnabled ? ' ・連続ボーナス対象' : ''));
       return `
-      <div class="card ${t.done?'done':''}">
-        <button class="check-btn" data-id="${t.id}" data-action="toggle">${t.done?'✓':''}</button>
+      <div class="card ${done?'done':''}">
+        <button class="check-btn" data-id="${t.id}" data-action="toggle">${done?'✓':''}</button>
         <div class="card-body">
-          <div class="card-title">${escapeHtml(t.title)}${t.streakEnabled ? '<span class="streak-flag">🔥</span>' : ''}</div>
+          <div class="card-title">${escapeHtml(t.title)} ${badges.join(' ')}</div>
           <div class="card-meta">${metaText}</div>
         </div>
         <div class="xp-tag">+${shownXp} XP</div>
@@ -567,11 +737,105 @@ function render(){
       </div>`;
     }).join('');
   }
+
+  renderCalendar();
 }
 
 function escapeHtml(s){
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+let calViewDate = new Date();
+let calSelectedDate = todayStr();
+
+function renderCalendar(){
+  const y = calViewDate.getFullYear();
+  const m = calViewDate.getMonth();
+  document.getElementById('cal-title').textContent = y + '年' + (m+1) + '月';
+
+  const firstDay = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const daysInPrevMonth = new Date(y, m, 0).getDate();
+  const today = todayStr();
+
+  const cells = [];
+  for(let i=0; i<firstDay; i++){
+    cells.push({ dateStr:null, label: daysInPrevMonth - firstDay + 1 + i, otherMonth:true });
+  }
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = y + '-' + String(m+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    cells.push({ dateStr, label:d, otherMonth:false });
+  }
+  let trail = 1;
+  while(cells.length % 7 !== 0){ cells.push({ dateStr:null, label: trail++, otherMonth:true }); }
+
+  document.getElementById('cal-grid').innerHTML = cells.map(c=>{
+    if(c.otherMonth) return '<div class="cal-cell other-month">' + c.label + '</div>';
+    const hasHistory = state.history.some(h=>h.date === c.dateStr);
+    const scheduledCount = state.tasks.filter(t=>t.scheduledDate === c.dateStr && !isTaskDoneToday(t)).length;
+    const classes = ['cal-cell'];
+    if(c.dateStr === today) classes.push('today');
+    if(scheduledCount > 0) classes.push('has-schedule');
+    if(c.dateStr === calSelectedDate) classes.push('selected');
+    return '<div class="' + classes.join(' ') + '" data-date="' + c.dateStr + '">' + c.label
+      + (scheduledCount>0 ? '<span class="cal-badge">'+scheduledCount+'</span>' : '')
+      + (hasHistory ? '<span class="cal-dot"></span>' : '')
+      + '</div>';
+  }).join('');
+
+  renderCalendarDetail();
+}
+
+function renderCalendarDetail(){
+  const detail = document.getElementById('cal-detail');
+  const dateStr = calSelectedDate;
+  if(!dateStr){ detail.innerHTML = ''; return; }
+  const parts = dateStr.split('-');
+  const dateLabel = parts[1] + '月' + parts[2] + '日';
+
+  const scheduled = state.tasks.filter(t=>t.scheduledDate === dateStr);
+  const historyItems = state.history.filter(h=>h.date === dateStr);
+
+  let html = '<h3>' + dateLabel + '</h3>';
+  if(scheduled.length === 0 && historyItems.length === 0){
+    html += '<div class="cal-detail-empty">この日には予定も記録もありません。</div>';
+  } else {
+    scheduled.forEach(t=>{
+      html += '<div class="cal-detail-item"><span>📅 ' + escapeHtml(t.title) + '</span><span class="cal-item-right">+' + t.xp + ' XP<button class="cal-del-btn" data-id="' + t.id + '" data-action="delete-scheduled">×</button></span></div>';
+    });
+    historyItems.forEach(h=>{
+      html += '<div class="cal-detail-item"><span>✓ ' + escapeHtml(h.title) + '</span><span>+' + h.xp + ' XP</span></div>';
+    });
+  }
+  detail.innerHTML = html;
+}
+
+document.getElementById('cal-prev').addEventListener('click', ()=>{
+  calViewDate.setMonth(calViewDate.getMonth()-1);
+  renderCalendar();
+});
+document.getElementById('cal-next').addEventListener('click', ()=>{
+  calViewDate.setMonth(calViewDate.getMonth()+1);
+  renderCalendar();
+});
+document.getElementById('cal-grid').addEventListener('click', (e)=>{
+  const cell = e.target.closest('.cal-cell[data-date]');
+  if(!cell || !cell.dataset.date) return;
+  calSelectedDate = cell.dataset.date;
+  renderCalendar();
+});
+
+document.getElementById('cal-detail').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-action="delete-scheduled"]');
+  if(!btn) return;
+  const id = btn.dataset.id;
+  const task = state.tasks.find(t=>t.id===id);
+  if(!task) return;
+  if(isTaskDoneToday(task)) state.xp = Math.max(0, state.xp - (task.earnedXp ?? 0));
+  state.tasks = state.tasks.filter(t=>t.id!==id);
+  render();
+  save();
+});
 
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -582,6 +846,16 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 });
 
+document.getElementById('task-streak').addEventListener('change', (e)=>{
+  const dailyBox = document.getElementById('task-daily');
+  if(e.target.checked){
+    dailyBox.checked = true;
+    dailyBox.disabled = true;
+  } else {
+    dailyBox.disabled = false;
+  }
+});
+
 document.getElementById('add-task-btn').addEventListener('click', ()=>{
   const titleEl = document.getElementById('task-title');
   const err = document.getElementById('task-err');
@@ -589,10 +863,25 @@ document.getElementById('add-task-btn').addEventListener('click', ()=>{
   if(!title){ err.style.display='block'; return; }
   err.style.display='none';
   const xp = parseInt(document.getElementById('task-xp').value, 10);
+  const daily = document.getElementById('task-daily').checked;
   const streakEnabled = document.getElementById('task-streak').checked;
-  state.tasks.unshift({ id: 't'+Date.now(), title, xp, done:false, streakEnabled, earnedXp:null, bonusApplied:0 });
+  const dateVal = document.getElementById('task-date').value;
+  state.tasks.unshift({
+    id: 't'+Date.now(),
+    title, xp,
+    recurrence: daily ? 'daily' : 'once',
+    streakEnabled: daily && streakEnabled,
+    scheduledDate: dateVal || null,
+    done: false,
+    lastDoneDate: null,
+    earnedXp: null,
+    bonusApplied: 0
+  });
   titleEl.value='';
+  document.getElementById('task-daily').checked = false;
+  document.getElementById('task-daily').disabled = false;
   document.getElementById('task-streak').checked = false;
+  document.getElementById('task-date').value = '';
   render();
   save();
 });
@@ -611,6 +900,59 @@ document.getElementById('add-reward-btn').addEventListener('click', async ()=>{
   await save();
 });
 
+function completeTask(task){
+  const oldLevel = levelFromXp(state.xp).level;
+  let bonusPct = 0;
+  if(task.recurrence === 'daily' && task.streakEnabled){
+    bumpStreak();
+    bonusPct = bonusRateForStreak(state.streak.count);
+  }
+  const bonusXp = Math.round(task.xp * bonusPct / 100);
+  const earned = task.xp + bonusXp;
+  task.earnedXp = earned;
+  task.bonusApplied = bonusPct;
+  state.xp += earned;
+
+  const today = todayStr();
+  if(task.recurrence === 'daily'){ task.lastDoneDate = today; } else { task.done = true; }
+
+  if(state.todayEarnedDate !== today){ state.todayEarnedDate = today; state.todayEarnedXp = 0; }
+  state.todayEarnedXp += earned;
+  state.history.push({ date: today, taskId: task.id, title: task.title, xp: earned });
+
+  let toastMsg = bonusPct > 0
+    ? '+' + earned + ' XP 獲得！(連続ボーナス+' + bonusPct + '%)'
+    : '+' + earned + ' XP 獲得！';
+
+  const activeCount = state.tasks.filter(t => isTaskVisibleToday(t) && !isTaskDoneToday(t)).length;
+  if(activeCount === 0 && state.lastClearBonusDate !== today && state.todayEarnedXp > 0){
+    const clearBonus = Math.round(state.todayEarnedXp * CLEAR_BONUS_RATE);
+    if(clearBonus > 0){
+      state.xp += clearBonus;
+      state.lastClearBonusDate = today;
+      toastMsg += ' ／ 全クリアボーナス +' + clearBonus + ' XP！';
+    }
+  }
+  showToast(toastMsg);
+
+  const newLevel = levelFromXp(state.xp).level;
+  if(newLevel > oldLevel) showLevelUp(newLevel);
+}
+
+function uncompleteTask(task){
+  state.xp = Math.max(0, state.xp - (task.earnedXp ?? 0));
+  const today = todayStr();
+  if(task.recurrence === 'daily'){ task.lastDoneDate = null; } else { task.done = false; }
+  task.earnedXp = null;
+  task.bonusApplied = 0;
+  for(let i = state.history.length - 1; i >= 0; i--){
+    if(state.history[i].taskId === task.id && state.history[i].date === today){
+      state.history.splice(i, 1);
+      break;
+    }
+  }
+}
+
 document.getElementById('task-list').addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-action]');
   if(!btn) return;
@@ -618,49 +960,9 @@ document.getElementById('task-list').addEventListener('click', (e)=>{
   const task = state.tasks.find(t=>t.id===id);
   if(!task) return;
   if(btn.dataset.action==='toggle'){
-    const wasDone = task.done;
-    task.done = !task.done;
-    if(!wasDone && task.done){
-      const oldLevel = levelFromXp(state.xp).level;
-      let bonusPct = 0;
-      if(task.streakEnabled){
-        bumpStreak();
-        bonusPct = bonusRateForStreak(state.streak.count);
-      }
-      const bonusXp = Math.round(task.xp * bonusPct / 100);
-      const earned = task.xp + bonusXp;
-      task.earnedXp = earned;
-      task.bonusApplied = bonusPct;
-      state.xp += earned;
-
-      const today = todayStr();
-      if(state.todayEarnedDate !== today){ state.todayEarnedDate = today; state.todayEarnedXp = 0; }
-      state.todayEarnedXp += earned;
-
-      let toastMsg = bonusPct > 0
-        ? '+' + earned + ' XP 獲得！(連続ボーナス+' + bonusPct + '%)'
-        : '+' + earned + ' XP 獲得！';
-
-      const activeCount = state.tasks.filter(t=>!t.done).length;
-      if(activeCount === 0 && state.lastClearBonusDate !== today && state.todayEarnedXp > 0){
-        const clearBonus = Math.round(state.todayEarnedXp * CLEAR_BONUS_RATE);
-        if(clearBonus > 0){
-          state.xp += clearBonus;
-          state.lastClearBonusDate = today;
-          toastMsg += ' ／ 全クリアボーナス +' + clearBonus + ' XP！';
-        }
-      }
-      showToast(toastMsg);
-
-      const newLevel = levelFromXp(state.xp).level;
-      if(newLevel > oldLevel) showLevelUp(newLevel);
-    } else if(wasDone && !task.done){
-      state.xp = Math.max(0, state.xp - (task.earnedXp ?? task.xp));
-      task.earnedXp = null;
-      task.bonusApplied = 0;
-    }
+    if(isTaskDoneToday(task)) uncompleteTask(task); else completeTask(task);
   } else if(btn.dataset.action==='delete'){
-    if(task.done) state.xp = Math.max(0, state.xp - (task.earnedXp ?? task.xp));
+    if(isTaskDoneToday(task)) state.xp = Math.max(0, state.xp - (task.earnedXp ?? 0));
     state.tasks = state.tasks.filter(t=>t.id!==id);
   }
   render();
@@ -727,11 +1029,7 @@ document.getElementById('backup-restore-btn').addEventListener('click', ()=>{
   }
   if(!confirm('現在のデータを上書きして復元します。よろしいですか？')) return;
   state = parsed;
-  if(!state.streak) state.streak = { count:0, lastDate:null };
-  if(!state.todayEarnedDate) state.todayEarnedDate = null;
-  if(typeof state.todayEarnedXp !== 'number') state.todayEarnedXp = 0;
-  if(!state.lastClearBonusDate) state.lastClearBonusDate = null;
-  if(!state.lastLoginBonusDate) state.lastLoginBonusDate = null;
+  migrateState();
   err.style.display = 'none';
   save();
   render();
