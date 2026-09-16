@@ -188,6 +188,10 @@ select{appearance:none;}
   padding:0 6px;border-radius:999px;margin-left:4px;
 }
 .field-hint{font-size:.72rem;color:var(--parchment-dim);margin:-.3rem 0 .7rem;line-height:1.5;}
+.done-heading{
+  font-size:.85rem;font-weight:600;color:var(--parchment-dim);
+  margin:.4rem 0 .6rem;padding-top:.8rem;border-top:1px solid var(--line);
+}
 .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;}
 .cal-nav{
   background:rgba(255,255,255,.8);border:1.5px solid var(--teal);border-radius:8px;
@@ -207,8 +211,11 @@ select{appearance:none;}
 .cal-cell.other-month{opacity:.3;cursor:default;}
 .cal-cell.today{border-color:var(--teal);border-width:2.5px;}
 .cal-cell.has-schedule{background:var(--panel-hi);border-color:var(--teal);}
+.cal-cell.perfect{background:var(--teal);border-color:var(--teal);color:#fff;font-weight:700;}
+.cal-cell.perfect .cal-dot{background:#fff;}
 .cal-cell.selected{background:var(--gold);color:#fff;font-weight:700;}
 .cal-cell.selected.has-schedule{background:var(--gold);border-color:var(--gold);}
+.cal-cell.selected.perfect{background:var(--gold);border-color:var(--gold);}
 .cal-dot{width:5px;height:5px;border-radius:50%;background:var(--teal);position:absolute;bottom:5px;}
 .cal-badge{
   position:absolute;top:2px;right:2px;background:var(--teal);color:#fff;
@@ -249,10 +256,10 @@ select{appearance:none;}
   to{transform:scale(1);opacity:1;}
 }
 .levelup-badge{
-  display:inline-block;
-  background:var(--panel);color:var(--teal);
-  font-size:.75rem;font-weight:700;letter-spacing:.03em;
-  padding:3px 12px;border-radius:999px;margin-bottom:.8rem;
+  display:block;
+  color:var(--ink);
+  font-size:.92rem;font-weight:400;line-height:1.6;
+  margin-bottom:.4rem;
 }
 .levelup-num{
   font-size:2.6rem;font-weight:700;color:var(--teal);line-height:1;margin-bottom:.6rem;
@@ -265,6 +272,7 @@ select{appearance:none;}
   border-radius:8px;padding:.6rem 1.6rem;font-weight:600;font-size:.88rem;
   cursor:pointer;
 }
+.backup-block{margin-top:1.6rem;}
 .backup-link{
   width:100%;background:rgba(255,255,255,.75);border:1.5px dashed var(--teal);color:var(--teal);
   font-size:.78rem;padding:.55rem 0;border-radius:8px;cursor:pointer;margin-bottom:.5rem;
@@ -330,9 +338,6 @@ select{appearance:none;}
     <button class="tab-btn" data-tab="calendar">カレンダー</button>
   </div>
 
-  <button class="backup-link" id="backup-copy-quick-btn">📋 データをコピー(バックアップ)</button>
-  <button class="backup-link backup-link-secondary" id="backup-open-btn">復元する</button>
-
   <div class="section active" id="tasks-section">
     <div id="task-list"></div>
 
@@ -363,6 +368,9 @@ select{appearance:none;}
       <div class="err" id="task-err">タスク名を入力してください</div>
       <button class="submit-btn" id="add-task-btn">クエストに追加</button>
     </div>
+
+    <div class="done-heading" id="done-heading" style="display:none;">完了済みタスク</div>
+    <div id="task-list-done"></div>
   </div>
 
   <div class="section" id="rewards-section">
@@ -394,6 +402,11 @@ select{appearance:none;}
     <div class="cal-detail" id="cal-detail"></div>
   </div>
 
+  <div class="backup-block">
+    <button class="backup-link" id="backup-copy-quick-btn">📋 データをコピー(バックアップ)</button>
+    <button class="backup-link backup-link-secondary" id="backup-open-btn">復元する</button>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <div class="levelup-overlay" id="levelup-overlay">
@@ -422,7 +435,7 @@ select{appearance:none;}
 
 <script>
 const STORAGE_KEY = 'quest-log-state';
-let state = { xp: 0, tasks: [], rewards: [], streak: { count: 0, lastDate: null }, history: [] };
+let state = { xp: 0, tasks: [], rewards: [], history: [], perfectDays: [] };
 
 function xpForLevel(n){ return 100 + (n-1)*40; }
 function levelFromXp(xp){
@@ -434,9 +447,15 @@ function levelFromXp(xp){
   return {level:lvl, into:remaining, need:xpForLevel(lvl)};
 }
 
-function todayStr(){ return localDateStr(new Date()); }
-function yesterdayStr(){
+const DAY_CUTOVER_HOUR = 6; // 1日の締め時間(この時刻を過ぎたら翌日扱い)
+function effectiveNow(){
   const d = new Date();
+  d.setHours(d.getHours() - DAY_CUTOVER_HOUR);
+  return d;
+}
+function todayStr(){ return localDateStr(effectiveNow()); }
+function yesterdayStr(){
+  const d = effectiveNow();
   d.setDate(d.getDate()-1);
   return localDateStr(d);
 }
@@ -461,13 +480,13 @@ function isTaskVisibleToday(t){
   return true;
 }
 function migrateState(){
-  if(!state.streak) state.streak = { count:0, lastDate:null };
   if(!state.todayEarnedDate) state.todayEarnedDate = null;
   if(typeof state.todayEarnedXp !== 'number') state.todayEarnedXp = 0;
   if(!state.lastClearBonusDate) state.lastClearBonusDate = null;
   if(!state.lastLoginBonusDate) state.lastLoginBonusDate = null;
   if(!state.lastSeasonGreetingDate) state.lastSeasonGreetingDate = null;
   if(!Array.isArray(state.history)) state.history = [];
+  if(!Array.isArray(state.perfectDays)) state.perfectDays = [];
   if(!Array.isArray(state.tasks)) state.tasks = [];
   state.tasks.forEach(t=>{
     if(!t.recurrence){
@@ -481,6 +500,7 @@ function migrateState(){
     if(t.scheduledDate === undefined) t.scheduledDate = null;
     if(t.lastDoneDate === undefined) t.lastDoneDate = null;
     if(t.completedDate === undefined) t.completedDate = null;
+    if(!t.streak) t.streak = { count:0, lastDate:null };
   });
 }
 function purgeOldOnceTasks(){
@@ -492,12 +512,12 @@ function purgeOldOnceTasks(){
     return true;
   });
 }
-function bumpStreak(){
-  if(!state.streak) state.streak = { count:0, lastDate:null };
+function bumpStreak(task){
+  if(!task.streak) task.streak = { count:0, lastDate:null };
   const today = todayStr();
-  if(state.streak.lastDate === today) return;
-  state.streak.count = (state.streak.lastDate === yesterdayStr()) ? state.streak.count + 1 : 1;
-  state.streak.lastDate = today;
+  if(task.streak.lastDate === today) return;
+  task.streak.count = (task.streak.lastDate === yesterdayStr()) ? task.streak.count + 1 : 1;
+  task.streak.lastDate = today;
 }
 
 const LEVEL_UP_MESSAGES = [
@@ -635,7 +655,7 @@ function showLoginGreeting(){
     state.lastSeasonGreetingDate = today;
   }
   const line = pool[Math.floor(Math.random()*pool.length)];
-  queueModal({ badge: timeData.badge, big: null, msg: line });
+  queueModal({ badge: null, big: null, msg: line });
 }
 
 let modalQueue = [];
@@ -647,7 +667,9 @@ function presentNextModal(){
   const overlay = document.getElementById('levelup-overlay');
   if(modalQueue.length === 0){ overlay.style.display = 'none'; return; }
   const m = modalQueue[0];
-  document.getElementById('levelup-badge').textContent = m.badge;
+  const badgeEl = document.getElementById('levelup-badge');
+  if(m.badge){ badgeEl.textContent = m.badge; badgeEl.style.display = 'block'; }
+  else { badgeEl.style.display = 'none'; }
   const numEl = document.getElementById('levelup-num');
   if(m.big){ numEl.textContent = m.big; numEl.style.display = 'block'; }
   else { numEl.style.display = 'none'; }
@@ -704,32 +726,34 @@ function render(){
   document.getElementById('xp-next').textContent = 'レベル ' + (level+1) + ' まで ' + (need-into) + ' XP';
 
   const streakRow = document.getElementById('streak-row');
-  const sc = state.streak ? state.streak.count : 0;
-  if(sc > 0){
-    streakRow.textContent = '🔥 連続 ' + sc + '日目・ボーナス +' + bonusRateForStreak(sc) + '%';
-  } else {
-    streakRow.textContent = '';
-  }
+  if(streakRow) streakRow.textContent = '';
 
   const list = document.getElementById('task-list');
+  const doneList = document.getElementById('task-list-done');
+  const doneHeading = document.getElementById('done-heading');
   const visible = state.tasks.filter(isTaskVisibleToday);
   const activeT = visible.filter(t=>!isTaskDoneToday(t));
   const doneT = visible.filter(t=>isTaskDoneToday(t));
-  const ordered = [...activeT, ...doneT];
-  if(ordered.length===0){
-    list.innerHTML = '<div class="empty">まだクエストがありません。下から追加しましょう。</div>';
-  } else {
-    list.innerHTML = ordered.map(t=>{
-      const done = isTaskDoneToday(t);
-      const shownXp = done ? (t.earnedXp ?? t.xp) : t.xp;
-      const badges = [];
-      if(t.recurrence === 'daily') badges.push('<span class="tag-daily">毎日</span>');
-      if(t.streakEnabled) badges.push('<span class="streak-flag">🔥</span>');
-      if(t.scheduledDate) badges.push('<span class="tag-date">📅 ' + t.scheduledDate.slice(5) + '〜</span>');
-      const metaText = done
-        ? ('完了済み' + (t.bonusApplied ? ' ・連続ボーナス+' + t.bonusApplied + '%' : ''))
-        : ('未完了' + (t.streakEnabled ? ' ・連続ボーナス対象' : ''));
-      return `
+
+  const renderCard = (t)=>{
+    const done = isTaskDoneToday(t);
+    const shownXp = done ? (t.earnedXp ?? t.xp) : t.xp;
+    const badges = [];
+    if(t.recurrence === 'daily') badges.push('<span class="tag-daily">毎日</span>');
+    if(t.streakEnabled){
+      const sc = t.streak ? t.streak.count : 0;
+      badges.push('<span class="streak-flag">🔥' + sc + '日目</span>');
+    }
+    if(t.scheduledDate) badges.push('<span class="tag-date">📅 ' + t.scheduledDate.slice(5) + '〜</span>');
+    const metaText = done
+      ? ('完了済み' + (t.bonusApplied ? ' ・連続ボーナス+' + t.bonusApplied + '%' : ''))
+      : (()=>{
+          if(!t.streakEnabled) return '未完了';
+          const sc = t.streak || { count:0, lastDate:null };
+          const nextCount = (sc.lastDate === yesterdayStr()) ? sc.count + 1 : 1;
+          return '未完了 ・達成で連続' + nextCount + '日目(+' + bonusRateForStreak(nextCount) + '%)';
+        })();
+    return `
       <div class="card ${done?'done':''}">
         <button class="check-btn" data-id="${t.id}" data-action="toggle">${done?'✓':''}</button>
         <div class="card-body">
@@ -740,7 +764,20 @@ function render(){
         <button class="del-btn" data-id="${t.id}" data-action="delete">×</button>
       </div>
     `;
-    }).join('');
+  };
+
+  if(activeT.length===0){
+    list.innerHTML = '<div class="empty">まだクエストがありません。下から追加しましょう。</div>';
+  } else {
+    list.innerHTML = activeT.map(renderCard).join('');
+  }
+
+  if(doneT.length===0){
+    doneHeading.style.display = 'none';
+    doneList.innerHTML = '';
+  } else {
+    doneHeading.style.display = 'block';
+    doneList.innerHTML = doneT.map(renderCard).join('');
   }
 
   const rlist = document.getElementById('reward-list');
@@ -796,10 +833,12 @@ function renderCalendar(){
   document.getElementById('cal-grid').innerHTML = cells.map(c=>{
     if(c.otherMonth) return '<div class="cal-cell other-month">' + c.label + '</div>';
     const hasHistory = state.history.some(h=>h.date === c.dateStr);
+    const isPerfect = state.perfectDays.includes(c.dateStr);
     const scheduledCount = state.tasks.filter(t=>t.scheduledDate === c.dateStr && !isTaskDoneToday(t)).length;
     const classes = ['cal-cell'];
     if(c.dateStr === today) classes.push('today');
     if(scheduledCount > 0) classes.push('has-schedule');
+    if(isPerfect) classes.push('perfect');
     if(c.dateStr === calSelectedDate) classes.push('selected');
     return '<div class="' + classes.join(' ') + '" data-date="' + c.dateStr + '">' + c.label
       + (scheduledCount>0 ? '<span class="cal-badge">'+scheduledCount+'</span>' : '')
@@ -928,8 +967,8 @@ function completeTask(task){
   const oldLevel = levelFromXp(state.xp).level;
   let bonusPct = 0;
   if(task.recurrence === 'daily' && task.streakEnabled){
-    bumpStreak();
-    bonusPct = bonusRateForStreak(state.streak.count);
+    bumpStreak(task);
+    bonusPct = bonusRateForStreak(task.streak.count);
   }
   const bonusXp = Math.round(task.xp * bonusPct / 100);
   const earned = task.xp + bonusXp;
@@ -949,12 +988,15 @@ function completeTask(task){
     : '+' + earned + ' XP 獲得！';
 
   const activeCount = state.tasks.filter(t => isTaskVisibleToday(t) && !isTaskDoneToday(t)).length;
-  if(activeCount === 0 && state.lastClearBonusDate !== today && state.todayEarnedXp > 0){
-    const clearBonus = Math.round(state.todayEarnedXp * CLEAR_BONUS_RATE);
-    if(clearBonus > 0){
-      state.xp += clearBonus;
-      state.lastClearBonusDate = today;
-      toastMsg += ' ／ 全クリアボーナス +' + clearBonus + ' XP！';
+  if(activeCount === 0){
+    if(!state.perfectDays.includes(today)) state.perfectDays.push(today);
+    if(state.lastClearBonusDate !== today && state.todayEarnedXp > 0){
+      const clearBonus = Math.round(state.todayEarnedXp * CLEAR_BONUS_RATE);
+      if(clearBonus > 0){
+        state.xp += clearBonus;
+        state.lastClearBonusDate = today;
+        toastMsg += ' ／ 全クリアボーナス +' + clearBonus + ' XP！';
+      }
     }
   }
   showToast(toastMsg);
@@ -977,7 +1019,7 @@ function uncompleteTask(task){
   }
 }
 
-document.getElementById('task-list').addEventListener('click', (e)=>{
+document.getElementById('tasks-section').addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-action]');
   if(!btn) return;
   const id = btn.dataset.id;
