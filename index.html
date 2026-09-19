@@ -230,6 +230,17 @@ select{appearance:none;}
   padding:.4rem 0;border-bottom:1px solid var(--line);
 }
 .cal-detail-item:last-child{border-bottom:none;}
+.log-card{
+  background:rgba(255,255,255,.88);border:1.5px solid var(--teal);border-radius:8px;
+  padding:.75rem .9rem;margin-bottom:.6rem;
+}
+.log-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;}
+.log-type{
+  font-size:.68rem;font-weight:600;color:#fff;background:var(--teal);
+  padding:1px 8px;border-radius:999px;
+}
+.log-datetime{font-size:.7rem;color:var(--parchment-dim);}
+.log-text{font-size:.88rem;color:var(--ink);line-height:1.6;}
 .cal-item-right{display:flex;align-items:center;gap:.4rem;flex:none;}
 .cal-del-btn{
   background:none;border:none;color:#B0AFA0;cursor:pointer;
@@ -336,6 +347,7 @@ select{appearance:none;}
     <button class="tab-btn active" data-tab="tasks">タスク</button>
     <button class="tab-btn" data-tab="rewards">ごほうび</button>
     <button class="tab-btn" data-tab="calendar">カレンダー</button>
+    <button class="tab-btn" data-tab="dialogue">セリフ</button>
   </div>
 
   <div class="section active" id="tasks-section">
@@ -402,6 +414,10 @@ select{appearance:none;}
     <div class="cal-detail" id="cal-detail"></div>
   </div>
 
+  <div class="section" id="dialogue-section">
+    <div id="dialogue-list"></div>
+  </div>
+
   <div class="backup-block">
     <button class="backup-link" id="backup-copy-quick-btn">📋 データをコピー(バックアップ)</button>
     <button class="backup-link backup-link-secondary" id="backup-open-btn">復元する</button>
@@ -435,7 +451,7 @@ select{appearance:none;}
 
 <script>
 const STORAGE_KEY = 'quest-log-state';
-let state = { xp: 0, tasks: [], rewards: [], history: [], perfectDays: [] };
+let state = { xp: 0, tasks: [], rewards: [], history: [], perfectDays: [], dialogueLog: [] };
 
 function xpForLevel(n){ return 100 + (n-1)*40; }
 function levelFromXp(xp){
@@ -485,8 +501,10 @@ function migrateState(){
   if(!state.lastClearBonusDate) state.lastClearBonusDate = null;
   if(!state.lastLoginBonusDate) state.lastLoginBonusDate = null;
   if(!state.lastSeasonGreetingDate) state.lastSeasonGreetingDate = null;
+  if(!state.lastAllClearGreetDate) state.lastAllClearGreetDate = null;
   if(!Array.isArray(state.history)) state.history = [];
   if(!Array.isArray(state.perfectDays)) state.perfectDays = [];
+  if(!Array.isArray(state.dialogueLog)) state.dialogueLog = [];
   if(!Array.isArray(state.tasks)) state.tasks = [];
   state.tasks.forEach(t=>{
     if(!t.recurrence){
@@ -500,8 +518,21 @@ function migrateState(){
     if(t.scheduledDate === undefined) t.scheduledDate = null;
     if(t.lastDoneDate === undefined) t.lastDoneDate = null;
     if(t.completedDate === undefined) t.completedDate = null;
+    if(t.createdDate === undefined) t.createdDate = null;
     if(!t.streak) t.streak = { count:0, lastDate:null };
   });
+}
+function logDialogue(type, text){
+  const now = new Date();
+  const time = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  state.dialogueLog.unshift({ date: localDateStr(now), time, type, text });
+  if(state.dialogueLog.length > 300) state.dialogueLog.length = 300;
+}
+function shortDateStr(d){
+  const y = String(d.getFullYear()).slice(-2);
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return y + '/' + m + '/' + day;
 }
 function purgeOldOnceTasks(){
   const today = todayStr();
@@ -540,121 +571,188 @@ const LEVEL_UP_MESSAGES = [
 ];
 function showLevelUp(newLevel){
   const msg = LEVEL_UP_MESSAGES[Math.floor(Math.random()*LEVEL_UP_MESSAGES.length)];
+  logDialogue('レベルアップ', msg);
   queueModal({ badge: 'LEVEL UP!', big: 'レベル ' + newLevel, msg });
 }
 
-const TIME_GREETINGS = {
-  morning: {
-    badge: '……おはよう',
-    lines: [
-      'もう起きたのか、希羽。早い方だな。……悪くない生活だ。',
-      '今日はどんな一日にするつもりだ。……別に、深い意味はない。聞いただけだ。',
-      '朝から律儀な奴だ。俺の国では、朝を大事にする者は信用された。お前もその類だろう。',
-      '……眠そうだな。無理はするな。俺が見ている、それで十分だろう。'
-    ]
-  },
-  day: {
-    badge: '……調子はどうだ',
-    lines: [
-      '昼か。……お前は今、何をしている。別に気になったわけではないが。',
-      '一日の真ん中だ。ここで気を抜くと、あとが辛い。俺の経験則だが、当たっていると思う。',
-      '……腹は減っていないか。聞くだけ聞いておく。返事は期待していない。',
-      '淡々と進めばいい。派手にやる必要は、どこにもない。'
-    ]
-  },
-  evening: {
-    badge: '……お疲れ様、希羽',
-    lines: [
-      '夕方か。……今日の分は、もう片付いたのか。',
-      '一日の終わりが近い。俺の国では、この時間に一度、歩みを振り返る習わしがあった。',
-      '……疲れているなら、無理に続けなくていい。俺はそれでも構わない。',
-      '今日も、そこそこよくやったんじゃないか。……そこそこ、だからな。'
-    ]
-  },
-  night: {
-    badge: '……こんな時間まで',
-    lines: [
-      '夜更けだな。……根を詰めすぎるなよ、希羽。',
-      '俺の世界では、夜は休むためにある。お前の世界の常識は知らんが、体は同じだろう。',
-      '……眠れていないのか。理由は聞かない。ただ、無理はするな。',
-      '静かな時間だ。……こういう時くらい、気を抜いてもいいと思うがな。'
-    ]
-  }
-};
-function getTimeSlot(hour){
-  if(hour >= 5 && hour < 10) return 'morning';
-  if(hour >= 10 && hour < 17) return 'day';
-  if(hour >= 17 && hour < 21) return 'evening';
-  return 'night';
+const ALL_CLEAR_MESSAGES = [
+  '……今日の分は、全部片づいたようだな。よくやった、希羽。あとは休め。',
+  '全部終わったのか。……根を詰めすぎるなよ。今日くらいは、ゆっくりしろ。',
+  'これで今日はもう十分だ。……無理をしないことも、大事な仕事のうちだ。',
+  'よくやった。……あとの時間は、お前自身のために使え。',
+  '今日のノルマは終わりだ。俺がとやかく言うことは、もう何もない。ゆっくりしろ。',
+  '……疲れているだろう。今日はもう、頑張らなくていい。',
+  '全部片づいたな。俺の国でも、働き終えた者を休ませるのは当然のことだった。お前も、休め。',
+  'ここまでやれば十分だ。……あとは、自分を労わる番だ。',
+  '今日はよく動いた。……無理して続ける必要はない。休むのも、俺が見ている理由のひとつだ。',
+  '全部終わったか。……えらいぞ、希羽。あとはゆっくり休め。'
+];
+function showAllClear(){
+  const msg = ALL_CLEAR_MESSAGES[Math.floor(Math.random()*ALL_CLEAR_MESSAGES.length)];
+  logDialogue('全クリア', msg);
+  queueModal({ badge: null, big: null, msg });
 }
 
-const SEASON_LINES = {
-  spring: [
-    '桜とやらが咲いているらしいな。……俺の国にはない花だ、正直、少し気になっている。',
-    '春か。俺の海には、こんなふうに景色が変わる季節はない。……悪くない眺めだな。',
-    '花粉とやらで具合が悪くなる人間がいると聞いた。お前は平気なのか。',
-    'この時期は新しい生活が始まる者が多いらしいな。お前は変わらず、そこにいろ。',
-    '桜が散る様を「儚い」と表現するらしいが、俺にはまだよく分からん。……今度、実物を見せてもらおう。',
-    '暖かくなってきたな。俺の国は一年中こんな陽気だ。お前の方が忙しない気候だな。',
-    '春風というのは、悪くない。……特に意味はない、ただそう思っただけだ。',
-    '新年度、というものがあるらしいな。区切りをつけたがるのは、お前の国の癖か。',
-    '桜の下で祝う習慣があると聞いた。……俺の国に酒はあるが、花見という発想はなかったな。',
-    '一年中同じ景色の俺には、季節が動くというのがどうにも新鮮だ。……悪い気はしない。'
+const TIME_GREETINGS = {
+  early_morning: [
+    'もう起きたのか、希羽。早い方だな。……悪くない生活だ。',
+    '早朝か。俺の国でも、この時間に漁に出る者は信用された。お前も、その部類だろう。',
+    '日が昇りきる前に動き出すのは、悪くない性分だ。……別に、褒めているわけではない。',
+    'まだ眠っていてもおかしくない時間だが。……無理はするなよ。',
+    '静かな時間だな。……こういう時間に一人でいるのは、俺も嫌いじゃない。'
   ],
-  summer: [
-    'この暑さくらい、俺の国では当たり前だ。……お前の方が参っているように見えるがな。',
-    '蝉とやらの声がうるさいと聞いた。俺の国にはいない虫だ。今度聞いてみたいものだな。',
-    '花火というのは、俺の国の祭りの火とは違う仕掛けらしいな。……興味がないわけではない。',
-    '湿気というものには慣れん。俺の海の国は乾いた暑さだ。お前の夏は、少し厄介そうだな。',
-    '夏祭り、というものがあるらしいな。俺の国にも似た夜の宴はあった。懐かしいような、そうでもないような。',
-    '海が近くにあるなら、たまには出向くといい。……俺の国の海とは、色が違うのだろうがな。',
-    'この時期は体調を崩す奴が多いと聞く。無理はするなよ、希羽。',
-    '俺の国に四季はないが、暑さだけはよく知っている。今のお前より、上手く付き合える自信はある。',
-    '冷たいものばかり口にしていないだろうな。……別に、心配しているわけではない。',
-    '夜になっても暑いというのは、俺の国と似ているな。……少しだけ、居心地がいい。'
+  morning: [
+    '今日はどんな一日にするつもりだ。……別に、深い意味はない。聞いただけだ。',
+    '朝から律儀な奴だ。俺の国では、朝を大事にする者は信用された。お前もその類だろう。',
+    '一日の始まりだ。……別に気合を入れろとは言わない。いつも通りでいい。',
+    '支度は済んでいるのか。……聞いているだけだ、他意はない。',
+    '朝の空気は嫌いじゃない。俺の国でも、似たような静けさがあった。'
   ],
-  autumn: [
-    '紅葉とやらで山が赤くなるらしいな。……俺の国には、色を変える木がない。見てみたいものだ。',
-    '涼しくなってきたな。俺の国にこの感覚はない。悪くはないが、慣れないものだな。',
-    '「食欲の秋」というものがあるらしいが、理屈がよく分からん。……まあ、お前が元気ならそれでいい。',
-    '台風とやらが来ると聞いた。俺の海の嵐とは、また違う性質のものらしいな。用心しておけ。',
-    '銀杏の匂いがひどいと聞いたが、俺には分からん感覚だな。……お前はどう思っているんだ。',
-    '木々が葉を落とす、というのが俺には新鮮だ。俺の国の木は、一年中同じ姿をしている。',
-    '日が落ちるのが早くなったな。……気づいただけだ、他意はない。',
-    'この時期は物思いにふけりやすいと聞く。お前は、あまりそういう性分でもないだろうがな。',
-    '秋の空気は済んでいて、悪くないと思うが……俺の国の乾いた風とは、また違う涼しさだな。',
-    '季節が変わるたびに、俺の知らないことが増えていく。……それも、悪くはない。'
+  noon: [
+    '昼か。……お前は今、何をしている。別に気になったわけではないが。',
+    '飯は食ったのか。……聞くだけ聞いておく。返事は期待していない。',
+    '一日の折り返しだ。ここで気を抜くと、あとが辛い。俺の経験則だが、当たっていると思う。',
+    '昼時くらい、手を止めてもいいだろう。……俺が許可することでもないがな。',
+    '腹が減っては、まともに動けん。俺の国でも、それだけは共通していた。'
   ],
-  winter: [
-    '雪、というものを俺はまだ実物で見たことがない。……お前の国では、当たり前の光景なんだろうな。',
-    'この寒さは、正直に言うと堪える。俺の国に、こんな季節はない。',
-    '正月とやらで一年の節目をつけるらしいな。……区切りを大事にする国だ。',
-    'こたつというものに入ると出られなくなると聞いた。俺には理解しがたい魔道具だな。',
-    '忘年会とやらで一年を締めくくるらしいが、俺の国に似た習慣はない。……悪くない発想だとは思う。',
-    '息が白くなる、というのは俺の国では起こらない現象だ。今度、実際に確かめてみたいものだな。',
-    '暖かい飲み物を欲しがる季節らしいな。……別に、お前のために言っているわけじゃない。',
-    '俺の海は凍らない。お前の国のこの寒さには、正直まだ慣れそうにない。',
-    '一年の終わりというのは、俺の国にはない感覚だ。……悪くはない、区切りというのも。',
-    '寒いなら、無理に薄着をするな。……忠告しているだけだ、他意はない。'
+  early_afternoon: [
+    '昼下がりは気が緩む時間だ。……別に、咎めているわけではない。',
+    '一番気が抜ける時間帯だと聞いた。……お前は、大丈夫なんだろうな。',
+    '淡々と進めばいい。派手にやる必要は、どこにもない。',
+    'この時間は眠気が出やすいらしいな。俺の国にも、昼寝の習慣はあった。',
+    '日差しの角度が変わってきたな。……それだけだ、他意はない。'
+  ],
+  evening: [
+    '夕方か。……今日の分は、もう片付いたのか。',
+    '一日の終わりが近い。俺の国では、この時間に一度、歩みを振り返る習わしがあった。',
+    '……疲れているなら、無理に続けなくていい。俺はそれでも構わない。',
+    '今日も、そこそこよくやったんじゃないか。……そこそこ、だからな。',
+    '日が傾いてきた。……お前の一日も、そろそろ落ち着く頃合いか。'
+  ],
+  night: [
+    '夜だな。……今日一日、ご苦労だったな。',
+    'この時間は、無理に何かをする必要はない。俺の国でも、夜は夜のための時間だった。',
+    '……肩の力を抜け。今のお前は、少し張り詰めすぎている。',
+    '一日を終える前に、少しくらい休め。……別に、心配しているわけじゃない。',
+    '夜の静けさは、俺の性分に合っている。お前も、悪くないと思わないか。'
+  ],
+  late_night: [
+    '夜更けだな。……根を詰めすぎるなよ、希羽。',
+    '俺の世界では、夜は休むためにある。お前の世界の常識は知らんが、体は同じだろう。',
+    '……眠れていないのか。理由は聞かない。ただ、無理はするな。',
+    '静かな時間だ。……こういう時くらい、気を抜いてもいいと思うがな。',
+    'こんな時間まで起きているとは。……別に、責めているわけじゃない。だが、早く休め。'
   ]
 };
-function getSeason(month){
-  if(month >= 3 && month <= 5) return 'spring';
-  if(month >= 6 && month <= 8) return 'summer';
-  if(month >= 9 && month <= 11) return 'autumn';
-  return 'winter';
+function getTimeSlot(hour){
+  if(hour >= 6 && hour <= 8) return 'early_morning';
+  if(hour >= 9 && hour <= 11) return 'morning';
+  if(hour === 12) return 'noon';
+  if(hour >= 13 && hour <= 15) return 'early_afternoon';
+  if(hour >= 16 && hour <= 18) return 'evening';
+  if(hour >= 19 && hour <= 21) return 'night';
+  if(hour >= 22 || hour <= 5) return 'late_night';
+  return 'late_night';
 }
+
+const MONTH_LINES = {
+  1: [
+    '正月とやらで一年の節目をつけるらしいな。……区切りを大事にする国だ。',
+    'おせちというものは、保存の知恵から生まれたと聞いた。俺の国の乾物にも似た発想だ。',
+    '初詣、というものがあるらしいな。俺の国にも似た年始の祈りはあった。',
+    '一年で一番寒い時期らしいな。……俺には、まだこの寒さが堪える。',
+    '成人したことを祝う日があると聞いた。……お前も、いつかそういう日を迎えたのか。'
+  ],
+  2: [
+    '豆をまいて悪いものを払う習わしがあると聞いた。……俺の国の魔除けとは、また違うやり方だな。',
+    '立春、というものがあるらしいが、まだ寒さの底のようにも見えるな。',
+    '何かを贈る習わしがある時期だと聞いた。……俺には、贈り方がまだよく分からん。',
+    '一年で一番雪が多い時期らしいな。俺にはまだ、見慣れない光景だ。',
+    '寒さの底というのは、この時期のことを言うのか。……もう少しの辛抱だな。'
+  ],
+  3: [
+    '人形を飾って祝う習わしがあると聞いた。俺の国にも、似た形の魔除け人形があった。',
+    '学びの区切りを祝う式典があるらしいな。……終わりを祝うというのは、悪くない発想だ。',
+    '花粉とやらで具合が悪くなる人間がいると聞いた。お前は平気なのか。',
+    '昼と夜の長さが釣り合う日があるらしいな。俺の国では、そう変わらん毎日だが。',
+    '桜の便り、というものが聞こえてくる時期らしいな。……少し、楽しみにしている自分がいる。'
+  ],
+  4: [
+    '新年度、というものがあるらしいな。区切りをつけたがるのは、お前の国の癖か。',
+    '学び始める者たちの式典があると聞いた。……新しく始める者を見るのは、悪くない。',
+    '桜の下で祝う習慣があると聞いた。俺の国に酒はあるが、花見という発想はなかったな。',
+    '桜が満開だと聞いた。……今度、実物を見せてもらおう。',
+    '暖かくなってきたな。俺の国は一年中こんな陽気だ。お前の方が忙しない気候だな。'
+  ],
+  5: [
+    '長い休みがあると聞いた。……お前は、ちゃんと休んでいるんだろうな。',
+    '子の成長を祝う日があるらしいな。俺の国にも、似た形の祝い事はあった。',
+    '木々が一斉に芽吹く時期らしいな。……一年中同じ緑の俺には、新鮮な話だ。',
+    '空が澄む時期だと聞いた。……悪くない眺めだろうな。',
+    '過ごしやすい気候らしいな。俺の国には、こういう「ちょうどいい」季節がない。'
+  ],
+  6: [
+    '長雨の季節らしいな。俺の乾いた国からすると、少し想像しにくい話だ。',
+    '雨に濡れて色を増す花があると聞いた。……見てみたいものだな。',
+    '湿気というものには慣れん。俺の海の国は乾いた暑さだ。お前のこの時期は、少し厄介そうだな。',
+    'この時期に祝言を挙げると縁起がいいという話を聞いた。……根拠はよく分からんが。',
+    '洗濯物が乾かないと聞いた。……それは、地味に厄介そうだな。'
+  ],
+  7: [
+    '年に一度、願い事を書いて笹に飾る習わしがあると聞いた。俺の国にも、星に願う夜はあった。',
+    '長雨が明けると聞いた。……ようやく、俺にも馴染みのある陽気になりそうだな。',
+    'この暑さくらい、俺の国では当たり前だ。……お前の方が参っているように見えるがな。',
+    '花火大会というものが増える時期らしいな。俺の国の祭りの火とは、また違う仕掛けだと聞いた。',
+    '夏本番だな。……この時期だけは、俺に分がある。'
+  ],
+  8: [
+    '先祖を迎える時期があると聞いた。俺の国にも、亡き者を偲ぶ夜はあった。',
+    '夏祭り、というものがあるらしいな。俺の国にも似た夜の宴はあった。懐かしいような、そうでもないような。',
+    '一年で一番暑い時期らしいが……この程度、俺には大したことではない。',
+    '蝉とやらの声がうるさいと聞いた。俺の国にはいない虫だ。今度聞いてみたいものだな。',
+    '冷たいものばかり口にしていないだろうな。……別に、心配しているわけではない。'
+  ],
+  9: [
+    '台風とやらが来ると聞いた。俺の海の嵐とは、また違う性質のものらしいな。用心しておけ。',
+    '暑さの名残がまだ続くと聞いた。……油断はするなよ。',
+    '満月を愛でる夜があるらしいな。俺の国でも、月を見上げる習わしはあった。',
+    '昼と夜の長さがまた釣り合う時期だと聞いた。……お前の国は、律儀に季節を数えるものだな。',
+    '涼しくなってきたな。俺の国にこの感覚はない。悪くはないが、慣れないものだな。'
+  ],
+  10: [
+    '紅葉とやらで山が赤くなり始めるらしいな。……俺の国には、色を変える木がない。見てみたいものだ。',
+    '体を動かして競う行事があると聞いた。俺の国の鍛錬とは、また違う趣らしいな。',
+    '仮装をして練り歩く習わしがあると聞いた。……お前の国は、時々よく分からん発想をするな。',
+    '空気が済んでいて、悪くないと思うが……俺の国の乾いた風とは、また違う涼しさだな。',
+    '日が落ちるのが早くなったな。……気づいただけだ、他意はない。'
+  ],
+  11: [
+    '山々が赤く染まる時期らしいな。……見てみたい、と思う自分がいる。',
+    '子の成長の節目を祝う日があると聞いた。俺の国にも、似た形の祝い事はあった。',
+    '冷たい風が吹き始めたと聞いた。……そろそろ、備えておいた方がいいんじゃないか。',
+    '「食欲の秋」というものがあるらしいが、理屈がよく分からん。……まあ、お前が元気ならそれでいい。',
+    '冬支度、という言葉があるらしいな。俺の国には縁のない準備だが、大事なことなんだろうな。'
+  ],
+  12: [
+    '年の瀬に祝う行事があると聞いた。俺の国にも、似た形の冬の祭りはあった。',
+    '忘年会とやらで一年を締めくくるらしいが、俺の国に似た習慣はない。……悪くない発想だとは思う。',
+    '一年の最後の日があるらしいな。……区切りを大事にする国だと、改めて思う。',
+    '俺の海は凍らない。お前の国のこの寒さには、正直まだ慣れそうにない。',
+    '一年の終わりというのは、俺の国にはない感覚だ。……悪くはない、区切りというのも。'
+  ]
+};
 
 function showLoginGreeting(){
   const now = new Date();
   const today = todayStr();
-  const timeData = TIME_GREETINGS[getTimeSlot(now.getHours())];
-  let pool = timeData.lines;
+  const timeLines = TIME_GREETINGS[getTimeSlot(now.getHours())];
+  let pool = timeLines;
   if(state.lastSeasonGreetingDate !== today){
-    pool = pool.concat(SEASON_LINES[getSeason(now.getMonth()+1)]);
+    pool = pool.concat(MONTH_LINES[now.getMonth()+1]);
     state.lastSeasonGreetingDate = today;
   }
   const line = pool[Math.floor(Math.random()*pool.length)];
+  logDialogue('ログイン', line);
   queueModal({ badge: null, big: null, msg: line });
 }
 
@@ -745,14 +843,14 @@ function render(){
       badges.push('<span class="streak-flag">🔥' + sc + '日目</span>');
     }
     if(t.scheduledDate) badges.push('<span class="tag-date">📅 ' + t.scheduledDate.slice(5) + '〜</span>');
-    const metaText = done
+    const metaText = (done
       ? ('完了済み' + (t.bonusApplied ? ' ・連続ボーナス+' + t.bonusApplied + '%' : ''))
       : (()=>{
           if(!t.streakEnabled) return '未完了';
           const sc = t.streak || { count:0, lastDate:null };
           const nextCount = (sc.lastDate === yesterdayStr()) ? sc.count + 1 : 1;
           return '未完了 ・達成で連続' + nextCount + '日目(+' + bonusRateForStreak(nextCount) + '%)';
-        })();
+        })()) + (t.createdDate ? ' ・追加:' + t.createdDate : '');
     return `
       <div class="card ${done?'done':''}">
         <button class="check-btn" data-id="${t.id}" data-action="toggle">${done?'✓':''}</button>
@@ -800,6 +898,25 @@ function render(){
   }
 
   renderCalendar();
+  renderDialogueLog();
+}
+
+function renderDialogueLog(){
+  const list = document.getElementById('dialogue-list');
+  if(!list) return;
+  if(state.dialogueLog.length === 0){
+    list.innerHTML = '<div class="empty">まだセリフの記録がありません。</div>';
+    return;
+  }
+  list.innerHTML = state.dialogueLog.map(entry => `
+    <div class="log-card">
+      <div class="log-meta">
+        <span class="log-type">${escapeHtml(entry.type)}</span>
+        <span class="log-datetime">${entry.date} ${entry.time}</span>
+      </div>
+      <div class="log-text">${escapeHtml(entry.text)}</div>
+    </div>
+  `).join('');
 }
 
 function escapeHtml(s){
@@ -935,6 +1052,7 @@ document.getElementById('add-task-btn').addEventListener('click', ()=>{
     recurrence: daily ? 'daily' : 'once',
     streakEnabled: daily && streakEnabled,
     scheduledDate: dateVal || null,
+    createdDate: shortDateStr(new Date()),
     done: false,
     lastDoneDate: null,
     earnedXp: null,
@@ -997,6 +1115,10 @@ function completeTask(task){
         state.lastClearBonusDate = today;
         toastMsg += ' ／ 全クリアボーナス +' + clearBonus + ' XP！';
       }
+    }
+    if(state.lastAllClearGreetDate !== today){
+      state.lastAllClearGreetDate = today;
+      showAllClear();
     }
   }
   showToast(toastMsg);
